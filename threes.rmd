@@ -1,0 +1,65 @@
+---
+title: "NBA 3 Point Attempts"
+author: "Bill Schmid"
+date: "5/24/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(nbastatR)
+library(tidyverse)
+library(janitor)
+```
+
+```{r}
+df_team_shots <- read_csv(here::here("df_team_shots.csv"))
+```
+
+```{r}
+df_threes <- df_team_shots %>% 
+  count(year_season, name_team, date_game, type_shot) %>% 
+  pivot_wider(names_from = type_shot, 
+              values_from = n) %>% 
+  clean_names() %>% 
+  mutate(more_threes = case_when(
+    x2pt_field_goal < x3pt_field_goal ~ 1,
+    TRUE ~ 0
+  )) %>% 
+  select(-x2pt_field_goal, -x3pt_field_goal)
+
+df_threes_thresh <- df_team_shots %>% 
+  add_count(year_season, name_team, date_game, type_shot) %>%
+  add_count(year_season, name_team, date_game, type_shot, type_event) %>% 
+  filter(is_shot_made == "TRUE") %>% 
+  distinct(
+    across(
+      c(year_season, name_team, date_game, type_shot)
+      ), 
+    .keep_all = TRUE) %>% 
+  select(year_season, name_team, date_game, type_shot, n, nn) %>% 
+  mutate(fg_perc = round(nn/n, 2)) %>%
+  select(-n, -nn) %>% 
+  pivot_wider(names_from = type_shot, 
+              values_from = fg_perc) %>% 
+  left_join(df_threes) %>% 
+  clean_names() %>% 
+  mutate(three_combo = case_when(
+    more_threes == 1 & x2pt_field_goal < x3pt_field_goal ~ 1,
+    TRUE ~ 0
+    )) %>% 
+  count(year_season, wt = three_combo) %>% 
+  mutate(
+    total_games = case_when(
+    year_season == 2020 | year_season == 2021 ~ 72 * 30,
+    TRUE ~ 82 * 30
+    ),
+    perc = round(n/total_games, 3))
+
+  
+```
+
+
